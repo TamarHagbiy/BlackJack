@@ -391,9 +391,9 @@ def main():
     print(display_client_started(CLIENT_NAME))
     print()
     
-    stats = GameStats()
-    
     while True:
+        # Reset stats for each new game session
+        stats = GameStats()
         # Ask for number of rounds
         while True:
             try:
