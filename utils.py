@@ -95,7 +95,8 @@ def draw_box(lines: List[str], width: int = 60, title: str = None) -> str:
     # Top border
     if title:
         title_str = f" {title} "
-        padding = width - len(title_str) - 2
+        title_visible_len = get_visible_width(title_str)
+        padding = width - title_visible_len - 2
         left_pad = padding // 2
         right_pad = padding - left_pad
         result.append(f"{TL}{H * left_pad}{title_str}{H * right_pad}{TR}")
@@ -104,9 +105,9 @@ def draw_box(lines: List[str], width: int = 60, title: str = None) -> str:
     
     # Content lines
     for line in lines:
-        # Pad line to width (account for color codes)
-        visible_len = len(strip_ansi(line))
-        padding = width - 4 - visible_len
+        # Pad line to width (account for color codes and emojis)
+        visible_len = get_visible_width(line)
+        padding = max(0, width - 4 - visible_len)
         result.append(f"{V} {line}{' ' * padding} {V}")
     
     # Bottom border
@@ -120,6 +121,30 @@ def strip_ansi(text: str) -> str:
     import re
     ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
     return ansi_escape.sub('', text)
+
+
+def get_visible_width(text: str) -> int:
+    """
+    Get the visible width of text in terminal columns.
+    Accounts for ANSI codes (0 width) and emojis (2 width).
+    """
+    import unicodedata
+    
+    # First strip ANSI codes
+    clean = strip_ansi(text)
+    
+    width = 0
+    for char in clean:
+        # Check East Asian Width property
+        ea_width = unicodedata.east_asian_width(char)
+        if ea_width in ('F', 'W'):  # Fullwidth or Wide (includes most emojis)
+            width += 2
+        elif unicodedata.category(char) == 'So':  # Symbol, Other (catches more emojis)
+            width += 2
+        else:
+            width += 1
+    
+    return width
 
 
 # =============================================================================
