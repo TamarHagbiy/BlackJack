@@ -1,4 +1,4 @@
-# Blackjack Network Application Architecture
+# Blackjack Network Application 
 
 ## Overview
 
