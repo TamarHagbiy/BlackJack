@@ -23,34 +23,50 @@ from game_logic import (
 from utils import (
     log_info, log_success, log_warning, log_error,
     display_client_started, display_welcome, display_game_state, display_result,
-    colored, Colors, bold, draw_box
+    colored, Colors, bold, draw_box, format_card_colored
 )
 
 
 # =============================================================================
-# STATISTICS
+# STATISTICS & POINTS
 # =============================================================================
 
+# Points awarded per outcome
+POINTS_WIN_WITH_STATS = 10       # Win with statistics shown
+POINTS_WIN_NO_STATS = 20         # Win without statistics (2x bonus!)
+POINTS_TIE = 5                   # Tie (same for both modes)
+POINTS_LOSS = 0                  # Loss (no points)
+
+
 class GameStats:
-    """Track game statistics across sessions."""
+    """Track game statistics and points across sessions."""
     
-    def __init__(self):
+    def __init__(self, no_stats_mode: bool = False):
         self.wins = 0
         self.losses = 0
         self.ties = 0
         self.total_rounds = 0
+        self.points = 0
+        self.no_stats_mode = no_stats_mode  # Bonus points mode
     
     def record_win(self):
         self.wins += 1
         self.total_rounds += 1
+        # Award more points for playing without statistics
+        if self.no_stats_mode:
+            self.points += POINTS_WIN_NO_STATS
+        else:
+            self.points += POINTS_WIN_WITH_STATS
     
     def record_loss(self):
         self.losses += 1
         self.total_rounds += 1
+        self.points += POINTS_LOSS
     
     def record_tie(self):
         self.ties += 1
         self.total_rounds += 1
+        self.points += POINTS_TIE
     
     def win_rate(self) -> float:
         if self.total_rounds == 0:
@@ -58,7 +74,7 @@ class GameStats:
         return (self.wins / self.total_rounds) * 100
     
     def __str__(self):
-        return f"W:{self.wins} L:{self.losses} T:{self.ties} ({self.win_rate():.1f}%)"
+        return f"W:{self.wins} L:{self.losses} T:{self.ties} ({self.win_rate():.1f}%) | {self.points} pts"
 
 
 # =============================================================================
@@ -137,12 +153,12 @@ def listen_for_offer() -> Tuple[str, int, str]:
 # =============================================================================
 
 def format_cards_display(cards: List[Tuple[int, int]]) -> str:
-    """Format a list of cards for display."""
-    return ' '.join(format_card(rank, suit) for rank, suit in cards)
+    """Format a list of cards for display with colors."""
+    return ' '.join(format_card_colored(rank, suit) for rank, suit in cards)
 
 
 def play_game(server_ip: str, tcp_port: int, server_name: str, 
-              num_rounds: int, stats: GameStats):
+              num_rounds: int, stats: GameStats, show_stats: bool = True):
     """
     Connect to server and play the specified number of rounds.
     
@@ -152,6 +168,7 @@ def play_game(server_ip: str, tcp_port: int, server_name: str,
         server_name: Server's team name
         num_rounds: Number of rounds to play
         stats: GameStats object to update
+        show_stats: Whether to show statistics (default True)
     """
     log_info(f"Connecting to {server_name} at {server_ip}:{tcp_port}...")
     
@@ -173,7 +190,7 @@ def play_game(server_ip: str, tcp_port: int, server_name: str,
             print(f"  📍 Round {round_num}/{num_rounds} vs {server_name}")
             print(f"{colored('='*60, Colors.CYAN)}\n")
             
-            result = play_round(tcp_socket, stats)
+            result = play_round(tcp_socket, stats, show_stats)
             
             if result is None:
                 log_error("Connection lost during round")
@@ -192,13 +209,14 @@ def play_game(server_ip: str, tcp_port: int, server_name: str,
         log_error(f"Connection error: {e}")
 
 
-def play_round(tcp_socket: socket.socket, stats: GameStats) -> Optional[int]:
+def play_round(tcp_socket: socket.socket, stats: GameStats, show_stats: bool = True) -> Optional[int]:
     """
     Play a single round of blackjack.
     
     Args:
         tcp_socket: Connected TCP socket
         stats: GameStats object to update
+        show_stats: Whether to show statistics (default True)
         
     Returns:
         Result code (RESULT_WIN/LOSS/TIE) or None if error
@@ -248,12 +266,17 @@ def play_round(tcp_socket: socket.socket, stats: GameStats) -> Optional[int]:
     # =========================================================================
     
     while True:
-        # Calculate odds
-        hit_odds = calculate_odds_if_hit(player_total, dealer_visible_value, known_cards)
-        stand_odds = calculate_odds_if_stand(player_total, dealer_visible_value, known_cards)
-        rec, hit_win, stand_win = get_recommendation(player_total, dealer_visible_value, known_cards)
+        # Calculate odds only if showing statistics
+        if show_stats:
+            hit_odds = calculate_odds_if_hit(player_total, dealer_visible_value, known_cards)
+            stand_odds = calculate_odds_if_stand(player_total, dealer_visible_value, known_cards)
+            rec, hit_win, stand_win = get_recommendation(player_total, dealer_visible_value, known_cards)
+        else:
+            hit_odds = None
+            stand_odds = None
+            rec = None
         
-        # Display game state with odds
+        # Display game state (with or without odds based on mode)
         print(display_game_state(
             player_cards=format_cards_display(player_cards),
             player_total=player_total,
@@ -298,7 +321,7 @@ def play_round(tcp_socket: socket.socket, stats: GameStats) -> Optional[int]:
                 known_cards.append((rank, suit))
                 player_total = sum(card_value(r) for r, s in player_cards)
                 
-                print(f"\n  {colored('Drew:', Colors.CYAN)} {format_card(rank, suit)} (Total: {player_total})")
+                print(f"\n  {colored('Drew:', Colors.CYAN)} {format_card_colored(rank, suit)} (Total: {player_total})")
             
             # Check for bust
             if result == RESULT_LOSS:
@@ -307,7 +330,7 @@ def play_round(tcp_socket: socket.socket, stats: GameStats) -> Optional[int]:
                 
                 print(display_result(
                     RESULT_LOSS, player_total, 0,
-                    stats.wins, stats.losses, stats.ties
+                    stats.wins, stats.losses, stats.ties, show_stats
                 ))
                 return RESULT_LOSS
         else:
@@ -353,7 +376,7 @@ def play_round(tcp_socket: socket.socket, stats: GameStats) -> Optional[int]:
         if rank > 0:
             dealer_cards.append((rank, suit))
             dealer_total = sum(card_value(r) for r, s in dealer_cards)
-            print(f"  Dealer draws: {format_card(rank, suit)} (Total: {dealer_total})")
+            print(f"  Dealer draws: {format_card_colored(rank, suit)} (Total: {dealer_total})")
         
         # Check for final result
         if result != RESULT_ONGOING:
@@ -374,7 +397,7 @@ def play_round(tcp_socket: socket.socket, stats: GameStats) -> Optional[int]:
     
     print(display_result(
         result, player_total, dealer_total,
-        stats.wins, stats.losses, stats.ties
+        stats.wins, stats.losses, stats.ties, show_stats
     ))
     
     return result
@@ -384,16 +407,27 @@ def play_round(tcp_socket: socket.socket, stats: GameStats) -> Optional[int]:
 # MAIN
 # =============================================================================
 
-def main():
-    """Main entry point for the client."""
+def main(show_stats: bool = True):
+    """Main entry point for the client.
+    
+    Args:
+        show_stats: Whether to show statistics (default True)
+    """
     
     print(display_welcome())
     print(display_client_started(CLIENT_NAME))
+    
+    # Show mode info
+    if not show_stats:
+        print()
+        print(f"  {colored('🎰 BONUS MODE: Playing without statistics!', Colors.YELLOW)}")
+        print(f"  {colored(f'   Wins award {POINTS_WIN_NO_STATS} points (2x bonus!)', Colors.GREEN)}")
+    
     print()
     
     while True:
-        # Reset stats for each new game session
-        stats = GameStats()
+        # Reset stats for each new game session (no_stats_mode = bonus points mode)
+        stats = GameStats(no_stats_mode=not show_stats)
         # Ask for number of rounds
         while True:
             try:
@@ -418,14 +452,92 @@ def main():
             return
         
         # Play game
-        play_game(server_ip, tcp_port, server_name, num_rounds, stats)
+        play_game(server_ip, tcp_port, server_name, num_rounds, stats, show_stats)
         
         # Print session summary
-        print(f"\n{colored('='*50, Colors.GREEN)}")
-        print(f"  Finished playing {num_rounds} rounds")
-        print(f"  Win rate: {stats.win_rate():.1f}%")
-        print(f"  Total: {stats}")
-        print(f"{colored('='*50, Colors.GREEN)}\n")
+        if show_stats:
+            print(f"\n{colored('='*50, Colors.GREEN)}")
+            print(f"  Finished playing {num_rounds} rounds")
+            print(f"  Win rate: {stats.win_rate():.1f}%")
+            print(f"  Points earned: {colored(str(stats.points), Colors.YELLOW)} ⭐")
+            print(f"  Total: {stats}")
+            print(f"{colored('='*50, Colors.GREEN)}\n")
+        else:
+            # No-stats mode - still show points earned (that's the reward!)
+            print(f"\n{colored('='*50, Colors.GREEN)}")
+            print(f"  Finished playing {num_rounds} rounds")
+            print(f"  {colored('🎰 BONUS POINTS EARNED:', Colors.YELLOW)} {colored(str(stats.points), Colors.GREEN)} ⭐")
+            print(f"{colored('='*50, Colors.GREEN)}\n")
+        
+        # Always offer to submit to leaderboard (points are the incentive!)
+        _offer_leaderboard_submit(stats)
+        
+        # Ask what to do next
+        print(f"\n{colored('='*50, Colors.CYAN)}")
+        print(f"  {colored('What would you like to do?', Colors.BOLD)}")
+        print(f"  {colored('1', Colors.GREEN)} - Play again")
+        print(f"  {colored('2', Colors.YELLOW)} - Back to main menu")
+        print(f"  {colored('3', Colors.RED)} - Exit")
+        print(f"{colored('='*50, Colors.CYAN)}\n")
+        
+        try:
+            next_action = input(f"  Enter your choice ({colored('1', Colors.GREEN)}/{colored('2', Colors.YELLOW)}/{colored('3', Colors.RED)}): ").strip()
+            
+            if next_action == '2':
+                # Return to main menu
+                return "menu"
+            elif next_action == '3':
+                # Exit
+                print(f"\n{colored('Thanks for playing! Goodbye! 🎰', Colors.GREEN)}")
+                return "exit"
+            # Default: play again (continue the loop)
+        except (EOFError, KeyboardInterrupt):
+            print(f"\n{colored('Goodbye!', Colors.GREEN)}")
+            return "exit"
+
+
+def _offer_leaderboard_submit(stats: GameStats):
+    """Offer to submit results to the leaderboard."""
+    try:
+        submit = input(f"  Submit results to leaderboard? ({colored('Y', Colors.GREEN)}/{colored('N', Colors.RED)}): ").strip().lower()
+        
+        if submit not in ['y', 'yes']:
+            return
+        
+        # Get player name
+        player_name = input(f"  Enter your name for the leaderboard: ").strip()
+        if not player_name:
+            print(f"  {colored('No name entered, skipping submission.', Colors.YELLOW)}")
+            return
+        
+        # Try to submit
+        from leaderboard_client import LeaderboardClient
+        
+        client = LeaderboardClient()
+        if not client.is_available():
+            print(f"  {colored('Leaderboard server is not available.', Colors.YELLOW)}")
+            return
+        
+        result = client.submit_results(
+            player_name=player_name,
+            wins=stats.wins,
+            losses=stats.losses,
+            ties=stats.ties,
+            points=stats.points
+        )
+        
+        if result:
+            print(f"\n  {colored('✅ Results submitted successfully!', Colors.GREEN)}")
+            print(f"  Your total record: {result['wins']}W / {result['losses']}L / {result['ties']}T")
+            print(f"  Total points: {colored(str(result.get('points', 0)), Colors.YELLOW)} ⭐")
+            print(f"  Overall win rate: {result['win_rate']:.1f}%\n")
+        else:
+            print(f"  {colored('Failed to submit results.', Colors.RED)}")
+            
+    except (EOFError, KeyboardInterrupt):
+        print()
+    except Exception as e:
+        print(f"  {colored(f'Error submitting to leaderboard: {e}', Colors.RED)}")
 
 
 if __name__ == "__main__":

@@ -206,7 +206,7 @@ def display_game_state(player_cards: str, player_total: int,
 
 
 def display_result(result: int, player_total: int, dealer_total: int,
-                   wins: int, losses: int, ties: int) -> str:
+                   wins: int, losses: int, ties: int, show_stats: bool = True) -> str:
     """
     Display the round result.
     
@@ -217,6 +217,7 @@ def display_result(result: int, player_total: int, dealer_total: int,
         wins: Total wins so far
         losses: Total losses so far
         ties: Total ties so far
+        show_stats: Whether to show statistics (default True)
         
     Returns:
         str: Formatted result display
@@ -232,15 +233,17 @@ def display_result(result: int, player_total: int, dealer_total: int,
     
     lines.append("")
     lines.append(f"Your total: {player_total}  |  Dealer total: {dealer_total}")
-    lines.append("")
     
-    total_games = wins + losses + ties
-    win_rate = (wins / total_games * 100) if total_games > 0 else 0
-    
-    lines.append(f"Record: {colored(str(wins), Colors.GREEN)}W / " +
-                f"{colored(str(losses), Colors.RED)}L / " +
-                f"{colored(str(ties), Colors.YELLOW)}T  " +
-                f"(Win rate: {win_rate:.1f}%)")
+    if show_stats:
+        lines.append("")
+        
+        total_games = wins + losses + ties
+        win_rate = (wins / total_games * 100) if total_games > 0 else 0
+        
+        lines.append(f"Record: {colored(str(wins), Colors.GREEN)}W / " +
+                    f"{colored(str(losses), Colors.RED)}L / " +
+                    f"{colored(str(ties), Colors.YELLOW)}T  " +
+                    f"(Win rate: {win_rate:.1f}%)")
     
     return draw_box(lines, width=50, title="ROUND RESULT")
 
@@ -257,6 +260,55 @@ def display_welcome() -> str:
     ╚══════════════════════════════════════════════════════════╝
     """
     return colored(banner, Colors.CYAN)
+
+
+def display_leaderboard_intro() -> str:
+    """Display a fun introduction to the leaderboard system."""
+    
+    # Trophy ASCII art
+    trophy = colored("""
+                                   ___________
+                                  '._==_==_=_.'
+                                  .-\\:      /-.
+                                 | (|:.     |) |
+                                  '-|:.     |-'
+                                    \\::.    /
+                                     '::. .'
+                                       ) (
+                                     _.' '._
+                                    '-------'
+    """, Colors.YELLOW)
+    
+    lines = []
+    lines.append(colored("    🎰 WELCOME TO THE CASINO, HIGH ROLLER! 🎰", Colors.BOLD))
+    lines.append("")
+    lines.append(colored("    ╭─────────────────────────────────────────────────────╮", Colors.MAGENTA))
+    lines.append(colored("    │", Colors.MAGENTA) + colored("        🏆 GLOBAL LEADERBOARD SYSTEM 🏆", Colors.YELLOW) + colored("           │", Colors.MAGENTA))
+    lines.append(colored("    ╰─────────────────────────────────────────────────────╯", Colors.MAGENTA))
+    lines.append("")
+    lines.append(colored("    Think you're the best? PROVE IT!", Colors.CYAN))
+    lines.append(colored("    Your victories are tracked across the ENTIRE network!", Colors.CYAN))
+    lines.append("")
+    lines.append(colored("    ┌─────────────────────────────────────────────────────┐", Colors.GREEN))
+    lines.append(colored("    │", Colors.GREEN) + "  " + colored("💰 POINTS SYSTEM", Colors.YELLOW) + " - How to climb the ranks:        " + colored("│", Colors.GREEN))
+    lines.append(colored("    │", Colors.GREEN) + "                                                     " + colored("│", Colors.GREEN))
+    lines.append(colored("    │", Colors.GREEN) + "    " + colored("WITH STATS:", Colors.CYAN) + "    Win = " + colored("+10 pts", Colors.GREEN) + "   (Safe mode)       " + colored("│", Colors.GREEN))
+    lines.append(colored("    │", Colors.GREEN) + "    " + colored("NO STATS:", Colors.YELLOW) + "      Win = " + colored("+20 pts", Colors.GREEN) + "   " + colored("(2x YOLO MODE!)", Colors.RED) + "  " + colored("│", Colors.GREEN))
+    lines.append(colored("    │", Colors.GREEN) + "    " + colored("Tie:", Colors.DIM) + "           " + colored("+5 pts", Colors.YELLOW) + "                          " + colored("│", Colors.GREEN))
+    lines.append(colored("    │", Colors.GREEN) + "    " + colored("Loss:", Colors.DIM) + "          " + colored("+0 pts", Colors.RED) + "   (ouch...)              " + colored("│", Colors.GREEN))
+    lines.append(colored("    │", Colors.GREEN) + "                                                     " + colored("│", Colors.GREEN))
+    lines.append(colored("    └─────────────────────────────────────────────────────┘", Colors.GREEN))
+    lines.append("")
+    lines.append(colored("    🎲 ", Colors.YELLOW) + colored("PRO TIP:", Colors.BOLD) + colored(" Playing WITHOUT statistics means you're", Colors.WHITE))
+    lines.append(colored("       flying BLIND - no win/loss tracking during the game!", Colors.WHITE))
+    lines.append(colored("       But brave gamblers get ", Colors.WHITE) + colored("DOUBLE POINTS! 🚀", Colors.GREEN))
+    lines.append("")
+    lines.append(colored("    ╔═══════════════════════════════════════════════════════╗", Colors.CYAN))
+    lines.append(colored("    ║", Colors.CYAN) + colored("  \"Fortune favors the bold... and the slightly reckless\"", Colors.DIM) + colored(" ║", Colors.CYAN))
+    lines.append(colored("    ║", Colors.CYAN) + colored("                              - Ancient Casino Proverb 🎴  ", Colors.DIM) + colored("║", Colors.CYAN))
+    lines.append(colored("    ╚═══════════════════════════════════════════════════════╝", Colors.CYAN))
+    
+    return trophy + "\n".join(lines)
 
 
 def display_server_started(ip: str, tcp_port: int, server_name: str) -> str:

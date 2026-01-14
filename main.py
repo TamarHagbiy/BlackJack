@@ -12,7 +12,7 @@ from config import UDP_BROADCAST_PORT
 from protocol import unpack_offer
 from utils import (
     log_info, log_success, log_warning, log_error,
-    display_welcome, colored, Colors, draw_box
+    display_welcome, display_leaderboard_intro, colored, Colors, draw_box
 )
 
 
@@ -78,16 +78,83 @@ def check_dealer_available(timeout: float = 5.0) -> Optional[Tuple[str, int, str
         return None
 
 
-def run_client():
-    """Run the client application."""
+def run_client(show_stats: bool = True) -> str:
+    """Run the client application.
+    
+    Args:
+        show_stats: Whether to show statistics (default True)
+        
+    Returns:
+        str: "menu" to return to main menu, "exit" to quit
+    """
     import client
-    client.main()
+    return client.main(show_stats)
 
 
 def run_server():
     """Run the server application."""
     import server
     server.main()
+
+
+def display_leaderboard():
+    """Display the global leaderboard."""
+    from leaderboard_client import LeaderboardClient, format_leaderboard, format_player_stats
+    
+    client = LeaderboardClient()
+    
+    if not client.is_available():
+        print(f"\n  {colored('❌ Leaderboard server is not available!', Colors.RED)}")
+        print(f"  {colored('Make sure leaderboard_server.py is running.', Colors.YELLOW)}\n")
+        input(f"  Press {colored('Enter', Colors.CYAN)} to return to the main menu...")
+        print()
+        return
+    
+    while True:
+        print()
+        print(f"{colored('='*60, Colors.YELLOW)}")
+        print(f"  {colored('🏆 LEADERBOARD MENU', Colors.BOLD)}")
+        print(f"  {colored('1', Colors.GREEN)} - View Top 10")
+        print(f"  {colored('2', Colors.CYAN)} - View Top 25")
+        print(f"  {colored('3', Colors.MAGENTA)} - Search Player")
+        print(f"  {colored('4', Colors.RED)} - Back to main menu")
+        print(f"{colored('='*60, Colors.YELLOW)}\n")
+        
+        lb_choice = input(f"  Enter your choice: ").strip()
+        
+        if lb_choice == '1':
+            leaderboard = client.get_leaderboard(10)
+            if leaderboard:
+                print()
+                print(format_leaderboard(leaderboard, "🏆 TOP 10 PLAYERS"))
+            else:
+                print(f"\n  {colored('Could not fetch leaderboard.', Colors.RED)}")
+        
+        elif lb_choice == '2':
+            leaderboard = client.get_leaderboard(25)
+            if leaderboard:
+                print()
+                print(format_leaderboard(leaderboard, "🏆 TOP 25 PLAYERS"))
+            else:
+                print(f"\n  {colored('Could not fetch leaderboard.', Colors.RED)}")
+        
+        elif lb_choice == '3':
+            player_name = input(f"\n  Enter player name: ").strip()
+            if player_name:
+                player = client.get_player(player_name)
+                if player:
+                    print()
+                    print(format_player_stats(player))
+                else:
+                    msg = f'Player "{player_name}" not found.'
+                    print(f"\n  {colored(msg, Colors.YELLOW)}")
+        
+        elif lb_choice == '4':
+            print()
+            return
+        
+        else:
+            print(f"  {colored('Invalid choice.', Colors.RED)}")
 
 
 def display_instructions():
@@ -161,6 +228,7 @@ def display_instructions():
 def main():
     """Main entry point."""
     print(display_welcome())
+    print(display_leaderboard_intro())
     print()
     
     while True:
@@ -170,12 +238,33 @@ def main():
             print(f"  {colored('1', Colors.GREEN)} - Player (Client)")
             print(f"  {colored('2', Colors.YELLOW)} - Dealer (Server)")
             print(f"  {colored('3', Colors.CYAN)} - Instructions & Help")
+            print(f"  {colored('4', Colors.MAGENTA)} - 🏆 Leaderboard")
             print(f"{colored('='*60, Colors.CYAN)}\n")
             
-            choice = input(f"  Enter your choice ({colored('1', Colors.GREEN)}/{colored('2', Colors.YELLOW)}/{colored('3', Colors.CYAN)}): ").strip()
+            choice = input(f"  Enter your choice ({colored('1', Colors.GREEN)}/{colored('2', Colors.YELLOW)}/{colored('3', Colors.CYAN)}/{colored('4', Colors.MAGENTA)}): ").strip()
             
             if choice == '1':
-                # User wants to be a client (player)
+                # User wants to be a client (player) - ask about statistics
+                print()
+                print(f"{colored('='*60, Colors.GREEN)}")
+                print(f"  {colored('Choose game mode:', Colors.BOLD)}")
+                print(f"  {colored('1', Colors.GREEN)} - With Statistics (10 pts per win)")
+                print(f"  {colored('2', Colors.YELLOW)} - Without Statistics {colored('(20 pts per win - 2x BONUS!)', Colors.CYAN)}")
+                print(f"  {colored('3', Colors.RED)} - Back to main menu")
+                print(f"{colored('='*60, Colors.GREEN)}\n")
+                
+                mode_choice = input(f"  Enter your choice ({colored('1', Colors.GREEN)}/{colored('2', Colors.YELLOW)}/{colored('3', Colors.RED)}): ").strip()
+                
+                if mode_choice == '3':
+                    # Back to main menu
+                    print()
+                    continue
+                elif mode_choice not in ['1', '2']:
+                    print(f"  {colored('Invalid choice. Please enter 1, 2, or 3.', Colors.RED)}\n")
+                    continue
+                
+                show_stats = (mode_choice == '1')
+                
                 print()
                 print(f"  {colored('Checking for available dealers...', Colors.CYAN)}")
                 print()
@@ -213,8 +302,14 @@ def main():
                 
                 # Dealer found, run client
                 print()
-                run_client()
-                break
+                result = run_client(show_stats)
+                if result == "menu":
+                    # Return to main menu
+                    print()
+                    continue
+                else:
+                    # Exit
+                    break
                 
             elif choice == '2':
                 # User wants to be a server (dealer)
@@ -228,9 +323,14 @@ def main():
                 print()
                 display_instructions()
                 continue
+            
+            elif choice == '4':
+                # User wants to see leaderboard
+                display_leaderboard()
+                continue
                 
             else:
-                print(f"  {colored('Invalid choice. Please enter 1, 2, or 3.', Colors.RED)}\n")
+                print(f"  {colored('Invalid choice. Please enter 1, 2, 3, or 4.', Colors.RED)}\n")
                 continue
                 
         except (EOFError, KeyboardInterrupt):
